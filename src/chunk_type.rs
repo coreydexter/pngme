@@ -7,7 +7,7 @@ use std::{
 use crate::Error;
 
 #[derive(Debug)]
-enum ChunkTypeError {
+pub enum ChunkTypeError {
     InvalidCharacterLength,
     InvalidCharacter,
 }
@@ -34,16 +34,17 @@ impl fmt::Display for ChunkTypeError {
 // with upper-case and lower-case having different meanings.
 // Eg the Chunk Type `RuSt` is different to `Rust`
 // Refer to section 3.2 on the PNG Specification 1.2 for reference of details.
+// TODO write a brief description on creating a ChunkType
 #[derive(Debug, PartialEq, Eq)]
-struct ChunkType {
+pub struct ChunkType {
     bytes: [u8; 4],
 }
 
 impl ChunkType {
-    fn bytes(&self) -> [u8; 4] {
+    pub fn bytes(&self) -> [u8; 4] {
         self.bytes.clone()
     }
-    fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         //  For convenience in description and in examining PNG files,
         // type codes are restricted to consist of uppercase and lowercase
         // ASCII letters (A-Z and a-z, or 65-90 and 97-122 decimal)
@@ -51,22 +52,22 @@ impl ChunkType {
             .iter()
             .all(|&val| (val >= 65 && val <= 90) || (val >= 97 && val <= 122))
     }
-    fn is_critical(&self) -> bool {
+    pub fn is_critical(&self) -> bool {
         // Ancillary bit: bit 5 of first byte
         // 0 (uppercase) = critical, 1 (lowercase) = ancillary.
         is_bit_zero(self.bytes[0], 5)
     }
-    fn is_public(&self) -> bool {
+    pub fn is_public(&self) -> bool {
         // Private bit: bit 5 of second byte
         // 0 (uppercase) = public, 1 (lowercase) = private.
         is_bit_zero(self.bytes[1], 5)
     }
-    fn is_reserved_bit_valid(&self) -> bool {
+    pub fn is_reserved_bit_valid(&self) -> bool {
         // Reserved bit: bit 5 of third byte
         // Must be 0 (uppercase) in files conforming to this version of PNG.
         !is_bit_zero(self.bytes[2], 5)
     }
-    fn is_safe_to_copy(&self) -> bool {
+    pub fn is_safe_to_copy(&self) -> bool {
         // Safe-to-copy bit: bit 5 of fourth byte
         // 0 (uppercase) = unsafe to copy, 1 (lowercase) = safe to copy.
         !is_bit_zero(self.bytes[3], 5)
