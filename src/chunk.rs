@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::fmt::Display;
 use std::io::Read;
+use std::str::FromStr;
 
 use crate::chunk_type::ChunkType;
 use crate::{Error, Result};
@@ -38,6 +39,28 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    pub fn new(chunk_type: ChunkType, chunk_data: Vec<u8>) -> Chunk {
+        // TODO how can we provide a single slice with chunk_type and chunk_data
+        // and no new vec creation?
+        let mut crc_data = Vec::with_capacity(4 + chunk_data.len());
+        crc_data.extend(chunk_type.bytes().iter());
+        crc_data.extend(chunk_data.iter());
+
+        let crc = calculate_crc(&crc_data[..]);
+        Chunk {
+            length: chunk_data.len() as u32,
+            chunk_type: chunk_type,
+            chunk_data: chunk_data,
+            crc,
+        }
+    }
+
+    pub fn from_strings(chunk_type: &str, chunk_data: &str) -> Result<Chunk> {
+        let chunk_type = ChunkType::from_str(chunk_type)?;
+
+        Ok(Chunk::new(chunk_type, chunk_data.bytes().collect()))
+    }
+
     pub fn length(&self) -> u32 {
         self.length
     }
