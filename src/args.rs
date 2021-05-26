@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "basic")]
+#[structopt(name = "pngme")]
 pub struct ApplicationArguments {
     #[structopt(subcommand)]
     pub command: Command,
