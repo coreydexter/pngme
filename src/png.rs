@@ -1,4 +1,9 @@
-use std::{convert::TryFrom, io::Read};
+use std::{
+    convert::TryFrom,
+    fs::{self, File},
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 use crate::{chunk::Chunk, Error, Result};
 
@@ -31,7 +36,7 @@ impl std::fmt::Display for PngError {
     }
 }
 
-struct Png {
+pub struct Png {
     chunks: Vec<Chunk>,
 }
 
@@ -52,9 +57,22 @@ impl Png {
         }
     }
 
+    pub fn from_file(filename: &PathBuf) -> Result<Png> {
+        let data = fs::read(filename)?;
+
+        Png::try_from(&data[..])
+    }
+
+    pub fn write_file(&self, filename: &PathBuf) -> Result<()> {
+        fs::write(filename, &self.as_bytes()[..])?;
+
+        Ok(())
+    }
+
     pub fn append_chunk(&mut self, chunk: Chunk) {
-        // TODO this doesn't make sense - because then how we will have a valid PNG? The only chunk you could add is a IEND
-        self.chunks.push(chunk);
+        // We insert into the second last element so that the IEND header is always maintained
+        // at the back of the chunks
+        self.chunks.insert(self.chunks.len() - 1, chunk);
     }
 
     pub fn remove_chunk(&mut self, chunk_type: &str) -> Result<Chunk> {
