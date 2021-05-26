@@ -16,8 +16,6 @@ pub enum Command {
     Decode(Decode),
     #[structopt(name = "remove")]
     Remove(Remove),
-    #[structopt(name = "print")]
-    Print(Print),
 }
 
 #[derive(StructOpt, Debug)]
@@ -44,10 +42,4 @@ pub struct Remove {
     pub chunk_type: String,
     #[structopt(parse(from_os_str))]
     pub output_file: Option<PathBuf>,
-}
-
-#[derive(StructOpt, Debug)]
-pub struct Print {
-    #[structopt(parse(from_os_str))]
-    pub file_path: PathBuf,
 }
