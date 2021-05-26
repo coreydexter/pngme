@@ -24,19 +24,19 @@ To see a list of the parameters, use the `--help` command, eg
 
     > target\release\pngme.exe --help
     pngme 0.1.0
-     
-    USAGE:  
-       pngme.exe <SUBCOMMAND>
-    
+
+    USAGE:
+        pngme.exe <SUBCOMMAND>
+
     FLAGS:
         -h, --help       Prints help information
         -V, --version    Prints version information
-    
+
     SUBCOMMANDS:
-        decode
-        encode
+        decode    Read a message from a specified PNG file
+        encode    Add a message to a specified PNG file
         help      Prints this message or the help of the given subcommand(s)
-        remove    
+        remove    Remove a message from a specified PNG file
 
 # Examples
 
