@@ -14,6 +14,10 @@ pub fn execute_encode(args: Encode) {
         println!("Writing out file to {:?}", output_file);
         png.write_file(&output_file)
             .expect(&format!("Failed to write out file to {:?}", output_file));
+    } else {
+        println!("Writing out file to {:?}", args.file_path);
+        png.write_file(&args.file_path)
+            .expect(&format!("Failed to write out file to {:?}", args.file_path));
     }
 }
 
@@ -38,5 +42,8 @@ pub fn execute_remove(args: Remove) {
     if let Some(output_file) = args.output_file {
         png.write_file(&output_file)
             .expect(&format!("Failed to write out file to {:?}", output_file));
+    } else {
+        png.write_file(&args.file_path)
+            .expect(&format!("Failed to write out file to {:?}", args.file_path));
     }
 }
