@@ -11,6 +11,7 @@ enum ChunkError {
     InvalidCRCValue,
     RemainingBytes,
     LengthTooLarge,
+    NotEnoughBytes,
 }
 
 impl std::error::Error for ChunkError {}
@@ -23,6 +24,9 @@ impl std::fmt::Display for ChunkError {
             ChunkError::LengthTooLarge => write!(f, "Length exceeds allow range"),
             ChunkError::RemainingBytes => {
                 write!(f, "There were bytes remaining, length is likely incorrect")
+            }
+            ChunkError::NotEnoughBytes => {
+                write!(f, "There weren't enough bytes to satify the chunk")
             }
         }
     }
@@ -85,7 +89,37 @@ impl Chunk {
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        unimplemented!("as_bytes")
+        self.length
+            .to_be_bytes()
+            .iter()
+            .chain(self.chunk_type.to_string().as_bytes().iter())
+            .chain(self.chunk_data.iter())
+            .chain(self.crc.to_be_bytes().iter())
+            .copied()
+            .collect()
+    }
+
+    pub fn next_chunk(stream: &[u8]) -> Result<&[u8]> {
+        if stream.len() < 4 {
+            return Err(Box::new(ChunkError::NotEnoughBytes));
+        }
+
+        let orig_stream = stream;
+        let mut stream = stream;
+
+        let mut length = [0 as u8; 4];
+        stream.read_exact(&mut length)?;
+        let length = u32::from_be_bytes(length);
+
+        // Now we know the data length, we can determine the length of this chunk
+        // 4 bytes for length, 4 bytes for type, length bytes for data, 4 bytes for CRC
+        let chunk_length = (4 + 4 + length + 4) as usize;
+
+        if chunk_length > orig_stream.len() {
+            return Err(Box::new(ChunkError::LengthTooLarge));
+        }
+
+        Ok(&orig_stream[..chunk_length])
     }
 }
 
@@ -277,6 +311,28 @@ mod tests {
         let chunk = Chunk::try_from(chunk_data.as_ref());
 
         assert!(chunk.is_err());
+    }
+
+    #[test]
+    fn test_chunk_as_bytes() {
+        let data_length: u32 = 42;
+        let chunk_type = "RuSt".as_bytes();
+        let message_bytes = "This is where your secret message will be!".as_bytes();
+        let crc: u32 = 2882656334;
+
+        let chunk_data: Vec<u8> = data_length
+            .to_be_bytes()
+            .iter()
+            .chain(chunk_type.iter())
+            .chain(message_bytes.iter())
+            .chain(crc.to_be_bytes().iter())
+            .copied()
+            .collect();
+
+        let chunk = Chunk::try_from(chunk_data.as_ref()).unwrap();
+
+        let chunk_bytes = chunk.as_bytes();
+        assert_eq!(chunk_bytes, chunk_data);
     }
 
     #[test]
