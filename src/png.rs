@@ -1,38 +1,133 @@
-use std::convert::TryFrom;
+use std::{convert::TryFrom, io::Read};
 
 use crate::{chunk::Chunk, Error, Result};
 
-struct Png {}
+#[derive(Debug)]
+enum PngError {
+    ChunkNotPresent,
+    NeedAtLeastTwoChunks,
+    IHDRChunkShouldBeFirst,
+    IENDChunkShouldLast,
+    NotAValidPNGHeader,
+    InvalidChunk(usize),
+}
+
+impl std::error::Error for PngError {}
+
+impl std::fmt::Display for PngError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PngError::ChunkNotPresent => write!(f, "Chunk was not found"),
+            PngError::NeedAtLeastTwoChunks => write!(f, "Need at least two chunks provided"),
+            PngError::IHDRChunkShouldBeFirst => {
+                write!(f, "IHDR chunk type should be the first chunk")
+            }
+            PngError::IENDChunkShouldLast => write!(f, "IEND chunk type should be the last chunk"),
+            PngError::NotAValidPNGHeader => write!(f, "Header was not a valid PNG header"),
+            PngError::InvalidChunk(index) => {
+                write!(f, "Invalid chunk starting at index {}", index)
+            }
+        }
+    }
+}
+
+struct Png {
+    chunks: Vec<Chunk>,
+}
 
 impl Png {
     const STANDARD_HEADER: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+    const IHDR_TYPE: &'static str = "IHDR";
+    const IEND_TYPE: &'static str = "IEND";
 
-    pub fn from_chunks(chunks: Vec<Chunk>) -> Png {
-        todo!("from_chunks")
+    pub fn from_chunks(chunks: Vec<Chunk>) -> Result<Png> {
+        if chunks.len() < 2 {
+            Err(Box::new(PngError::NeedAtLeastTwoChunks))
+        } else if chunks[0].chunk_type().to_string() != "IHDR" {
+            Err(Box::new(PngError::IHDRChunkShouldBeFirst))
+        } else if chunks[chunks.len() - 1].chunk_type().to_string() != "IEND" {
+            Err(Box::new(PngError::IENDChunkShouldLast))
+        } else {
+            Ok(Png { chunks })
+        }
     }
 
     pub fn append_chunk(&mut self, chunk: Chunk) {
-        todo!("append_chunk");
+        // TODO this doesn't make sense - because then how we will have a valid PNG? The only chunk you could add is a IEND
+        self.chunks.push(chunk);
     }
 
     pub fn remove_chunk(&mut self, chunk_type: &str) -> Result<Chunk> {
-        todo!("remove_chunk")
+        if chunk_type == Png::IHDR_TYPE && self.chunks[1].chunk_type().to_string() != Png::IHDR_TYPE
+        {
+            // We must remain a valid PNG, so can only remove the IHDR chunk if the second chunk is a IHDR chunk
+            return Err(Box::new(PngError::IHDRChunkShouldBeFirst));
+        }
+        if chunk_type == Png::IEND_TYPE
+            && self.chunks[self.chunks.len() - 2].chunk_type().to_string() != Png::IEND_TYPE
+        {
+            // We must remain a valid PNG, so can only remove the IEND chunk if the second last chunk is a IEND chunk
+            return Err(Box::new(PngError::IENDChunkShouldLast));
+        }
+
+        let index = self
+            .get_first_chunk_of_type(chunk_type)
+            .map(|(index, _)| index);
+
+        if let Some(i) = index {
+            let chunk = self.chunks.remove(i);
+            Ok(chunk)
+        } else {
+            Err(Box::new(PngError::ChunkNotPresent))
+        }
     }
 
     pub fn header(&self) -> &[u8; 8] {
-        todo!("header")
+        &Png::STANDARD_HEADER
     }
 
     pub fn chunks(&self) -> &[Chunk] {
-        todo!("chunks")
+        &self.chunks[..]
     }
 
     pub fn chunk_by_type(&self, chunk_type: &str) -> Option<&Chunk> {
-        todo!("chunk_by_type")
+        self.get_first_chunk_of_type(chunk_type)
+            .map(|(_, chunk)| chunk)
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
-        todo!("as_bytes")
+        // TODO why do I need to collect this to get the chunk_data values into u8?
+        // if no collect is used and chunk_data is passed into `chain` an error like
+        //        Png::STANDARD_HEADER.iter().chain(chunk_iter);
+        //                                    ^^^^^ expected `u8`, found `&u8`
+        // is seen
+        let chunk_data: Vec<u8> = self
+            .chunks()
+            .into_iter()
+            .flat_map(|chunk| chunk.as_bytes())
+            .collect();
+
+        Png::STANDARD_HEADER
+            .iter()
+            .chain(chunk_data.iter())
+            .copied()
+            .collect()
+    }
+
+    fn get_first_chunk(&self) -> Option<&Chunk> {
+        self.chunks().get(0)
+    }
+
+    fn get_last_chunk(&self) -> Option<&Chunk> {
+        self.chunks().get(self.chunks().len() - 1)
+    }
+
+    fn get_first_chunk_of_type(&self, chunk_type: &str) -> Option<(usize, &Chunk)> {
+        self.chunks
+            .iter()
+            .enumerate()
+            .filter(|&(_, chunk)| chunk.chunk_type().to_string() == chunk_type)
+            .next()
     }
 }
 
@@ -40,13 +135,46 @@ impl TryFrom<&[u8]> for Png {
     type Error = Error;
 
     fn try_from(value: &[u8]) -> Result<Self> {
-        todo!("try_from &[u8]")
+        // Read first eight bytes and confirm equals the PNG header
+        // Then read chunks
+
+        // Possible errors:
+        //   incorrect header
+        //   invalid chunk data
+        //   should also check that the first chunk and the last chunk are the IHDR and IEND chunks
+
+        let mut header: [u8; 8] = [0; 8];
+        let mut cur_offset = 0;
+        let mut value = value;
+        value.read_exact(&mut header)?;
+        cur_offset += 8;
+
+        if header != Png::STANDARD_HEADER {
+            return Err(Box::new(PngError::NotAValidPNGHeader));
+        }
+
+        let mut chunks: Vec<Chunk> = vec![];
+        while value.len() != 0 {
+            let next_chunk_bytes = Chunk::next_chunk(value)?;
+            let chunk = Chunk::try_from(next_chunk_bytes);
+
+            if chunk.is_err() {
+                return Err(Box::new(PngError::InvalidChunk(cur_offset)));
+            }
+
+            let chunk = chunk.unwrap();
+            cur_offset += next_chunk_bytes.len();
+            value = &value[next_chunk_bytes.len()..];
+            chunks.push(chunk);
+        }
+
+        Ok(Png::from_chunks(chunks)?)
     }
 }
 
 impl std::fmt::Display for Png {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!("Display")
+        write!(f, "{:?}", self.as_bytes().iter().collect::<Vec<&u8>>())
     }
 }
 
@@ -58,32 +186,25 @@ mod tests {
     use std::convert::TryFrom;
     use std::str::FromStr;
 
-    fn chunk_from_strings(chunk_type: &str, data: &str) -> Result<Chunk> {
-        let chunk_type = ChunkType::from_str(chunk_type)?;
-        let data: Vec<u8> = data.bytes().collect();
-
-        Ok(Chunk::new(chunk_type, data))
-    }
-
     fn testing_chunks() -> Vec<Chunk> {
         let mut chunks = Vec::new();
 
-        chunks.push(Chunk::from_strings("FrSt", "I am the first chunk").unwrap());
+        chunks.push(Chunk::from_strings("IHDR", "I am the first chunk").unwrap());
         chunks.push(Chunk::from_strings("miDl", "I am another chunk").unwrap());
-        chunks.push(Chunk::from_strings("LASt", "I am the last chunk").unwrap());
+        chunks.push(Chunk::from_strings("IEND", "I am the last chunk").unwrap());
 
         chunks
     }
 
     fn testing_png() -> Png {
         let chunks = testing_chunks();
-        Png::from_chunks(chunks)
+        Png::from_chunks(chunks).unwrap()
     }
 
     #[test]
     fn test_from_chunks() {
         let chunks = testing_chunks();
-        let png = Png::from_chunks(chunks);
+        let png = Png::from_chunks(chunks).unwrap();
 
         assert_eq!(png.chunks().len(), 3);
     }
@@ -148,8 +269,8 @@ mod tests {
     #[test]
     fn test_chunk_by_type() {
         let png = testing_png();
-        let chunk = png.chunk_by_type("FrSt").unwrap();
-        assert_eq!(&chunk.chunk_type().to_string(), "FrSt");
+        let chunk = png.chunk_by_type("IHDR").unwrap();
+        assert_eq!(&chunk.chunk_type().to_string(), "IHDR");
         assert_eq!(&chunk.data_as_string().unwrap(), "I am the first chunk");
     }
 
@@ -163,17 +284,37 @@ mod tests {
     }
 
     #[test]
+    fn test_IHDR_chunk_must_remain() {
+        let mut png = testing_png();
+        // Confirm the test makes sense, i.e we do have the IHDR chunk
+        assert!(png.chunk_by_type("IHDR").is_some());
+
+        // We can't remove the IHDR chunk, that would create an invalid PNG
+        assert!(png.remove_chunk("IHDR").is_err());
+    }
+
+    #[test]
+    fn test_IEND_chunk_must_remain() {
+        let mut png = testing_png();
+        // Confirm the test makes sense, i.e we do have the IEND chunk
+        assert!(png.chunk_by_type("IEND").is_some());
+
+        // We can't remove the IEND chunk, that would create an invalid PNG
+        assert!(png.remove_chunk("IEND").is_err());
+    }
+
+    #[test]
     fn test_remove_chunk() {
         let mut png = testing_png();
-        png.remove_chunk("FrSt").unwrap();
-        let chunk = png.chunk_by_type("TeSt");
+        png.remove_chunk("miDl").unwrap();
+        let chunk = png.chunk_by_type("miDl");
         assert!(chunk.is_none());
     }
 
     #[test]
     fn test_png_from_image_file() {
-        let png = Png::try_from(&PNG_FILE[..]);
-        assert!(png.is_ok());
+        let png = Png::try_from(&PNG_FILE[..]).unwrap();
+        //assert!(png.is_ok());
     }
 
     #[test]
