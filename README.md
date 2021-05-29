@@ -37,6 +37,7 @@ To see a list of the parameters, use the `--help` command, eg
         encode           Add a message to a specified PNG file
         help             Prints this message or the help of the given subcommand(s)
         identify-text    Identify the chunks which have pure text in them
+        print            Display some information about the PNG and it's chunks
         remove           Remove a message from a specified PNG file
 
 # Examples
@@ -50,11 +51,37 @@ To see a list of the parameters, use the `--help` command, eg
     > target\release\pngme.exe decode examples/image.png teSt
     Woah dude does this actually work?
 
+## Printing
+
+    > target\release\pngme.exe print examples/image.png
+    There are 23 chunks within this png
+    0 - Chunk: 
+        Length: 13
+        Type:   IHDR
+        Data:   13 bytes
+        Crc:    2463534396
+
+    1 - Chunk:
+        Length: 1
+        Type:   sRGB
+        Data:   1 bytes
+        Crc:    2932743401
+
+    ...
+    
+    22 - Chunk:
+        Length: 0
+        Type:   IEND
+        Data:   0 bytes
+        Crc:    2923585666
+
+
+
 ## Identifying text
 
 Produces lines of the format `{chunk index} - {chunk type} - {chunk message as UTF-8 string}`
 
-    > target\release\pngme.exe identify-text examples/image.png teSt
+    > target\release\pngme.exe identify-text examples/image.png
     22 - teSt - Woah dude does this actually work?
 
 

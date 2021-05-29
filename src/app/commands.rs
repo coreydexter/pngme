@@ -1,5 +1,5 @@
-use crate::args::IdentifyText;
 use crate::args::{Decode, Encode, Remove};
+use crate::args::{IdentifyText, Print};
 use anyhow::Context;
 use lib_pngme::chunk::Chunk;
 use lib_pngme::png::Png;
@@ -76,6 +76,19 @@ pub fn execute_identify_text(args: IdentifyText) -> anyhow::Result<()> {
             }
             Err(_) => {}
         }
+    }
+
+    Ok(())
+}
+
+pub fn execute_print(args: Print) -> anyhow::Result<()> {
+    let png = Png::from_file(&args.file_path)
+        .with_context(|| format!("Failed to load PNG file {:?}", args.file_path))?;
+
+    println!("There are {} chunks within this png", png.chunks().len());
+
+    for (index, chunk) in png.chunks().iter().enumerate() {
+        println!("{} - {}", index, chunk);
     }
 
     Ok(())

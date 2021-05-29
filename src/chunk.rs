@@ -131,7 +131,13 @@ impl Chunk {
 
 impl Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.data_as_string().map_err(|_| std::fmt::Error)?)
+        writeln!(f, "Chunk: ")?;
+        writeln!(f, "    Length: {}", self.length)?;
+        writeln!(f, "    Type:   {}", self.chunk_type())?;
+        writeln!(f, "    Data:   {} bytes", self.chunk_data.len())?;
+        writeln!(f, "    Crc:    {}", self.crc)?;
+
+        Ok(())
     }
 }
 

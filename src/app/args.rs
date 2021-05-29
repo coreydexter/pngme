@@ -23,6 +23,9 @@ pub enum Command {
     /// Identify the chunks which have pure text in them
     #[structopt(name = "identify-text")]
     IdentifyText(IdentifyText),
+    /// Display some information about the PNG and it's chunks
+    #[structopt(name = "print")]
+    Print(Print),
 }
 
 #[derive(StructOpt, Debug)]
@@ -62,6 +65,13 @@ pub struct Remove {
 
 #[derive(StructOpt, Debug)]
 pub struct IdentifyText {
+    /// The input PNG file
+    #[structopt(parse(from_os_str))]
+    pub file_path: PathBuf,
+}
+
+#[derive(StructOpt, Debug)]
+pub struct Print {
     /// The input PNG file
     #[structopt(parse(from_os_str))]
     pub file_path: PathBuf,
