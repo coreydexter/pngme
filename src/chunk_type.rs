@@ -4,8 +4,9 @@ use std::{
     str::FromStr,
 };
 
-use crate::Error;
 use thiserror::Error;
+
+pub type ChunkTypeResult = Result<ChunkType, ChunkTypeError>;
 
 #[derive(Error, Debug)]
 pub enum ChunkTypeError {
@@ -30,7 +31,7 @@ impl ChunkType {
     pub fn bytes(&self) -> [u8; 4] {
         self.bytes.clone()
     }
-    pub fn is_valid(&self) -> Result<(), Box<ChunkTypeError>> {
+    pub fn is_valid(&self) -> Result<(), ChunkTypeError> {
         // For convenience in description and in examining PNG files,
         // type codes are restricted to consist of uppercase and lowercase
         // ASCII letters (A-Z and a-z, or 65-90 and 97-122 decimal)
@@ -42,7 +43,7 @@ impl ChunkType {
             .next();
 
         match bad_byte {
-            Some((i, &v)) => Err(Box::new(ChunkTypeError::InvalidCharacter(i, v))),
+            Some((i, &v)) => Err(ChunkTypeError::InvalidCharacter(i, v)),
             None => Ok(()),
         }
     }
@@ -80,21 +81,21 @@ fn is_bit_zero(input: u8, bit: u8) -> bool {
 }
 
 impl FromStr for ChunkType {
-    type Err = Error;
+    type Err = ChunkTypeError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> ChunkTypeResult {
         let s = s.as_bytes();
         match s.len() {
             4 => TryFrom::try_from([s[0], s[1], s[2], s[3]]),
-            len => Err(Box::new(ChunkTypeError::InvalidCharacterLength(len))),
+            len => Err(ChunkTypeError::InvalidCharacterLength(len)),
         }
     }
 }
 
 impl TryFrom<[u8; 4]> for ChunkType {
-    type Error = Error;
+    type Error = ChunkTypeError;
 
-    fn try_from(bytes: [u8; 4]) -> Result<Self, Self::Error> {
+    fn try_from(bytes: [u8; 4]) -> ChunkTypeResult {
         let chunk = ChunkType { bytes };
 
         match chunk.is_valid() {

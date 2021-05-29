@@ -1,14 +1,17 @@
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::io;
 use std::io::Read;
 use std::str::FromStr;
 use thiserror::Error;
 
 use crate::chunk_type::ChunkType;
-use crate::{Error, Result};
+use crate::chunk_type::ChunkTypeError;
+
+pub type ChunkResult = Result<Chunk, ChunkError>;
 
 #[derive(Error, Debug)]
-enum ChunkError {
+pub enum ChunkError {
     #[error("Provided CRC value `{0}` does match calculated CRC value `{1}`")]
     InvalidCRCValue(u32, u32),
     #[error("There were bytes `{0}` remaining, length is likely incorrect")]
@@ -17,6 +20,16 @@ enum ChunkError {
     LengthTooLarge(usize, usize),
     #[error("There weren't enough bytes `{0}` to satify the specified chunks length `{1}`")]
     NotEnoughBytes(usize, u32),
+    #[error("Failed to read")]
+    Io {
+        #[from]
+        source: io::Error,
+    },
+    #[error("Invalid ChunkType string")]
+    InvalidChunk {
+        #[from]
+        source: ChunkTypeError,
+    },
 }
 
 pub struct Chunk {
@@ -46,7 +59,7 @@ impl Chunk {
         }
     }
 
-    pub fn from_strings(chunk_type: &str, chunk_data: &str) -> Result<Chunk> {
+    pub fn from_strings(chunk_type: &str, chunk_data: &str) -> ChunkResult {
         let chunk_type = ChunkType::from_str(chunk_type)?;
 
         Ok(Chunk::new(chunk_type, chunk_data.bytes().collect()))
@@ -68,7 +81,7 @@ impl Chunk {
         self.crc
     }
 
-    pub fn data_as_string(&self) -> Result<String> {
+    pub fn data_as_string(&self) -> Result<String, ChunkError> {
         let str = String::from_utf8(self.chunk_data.clone())
             .expect("ahh whatever failed to parse utf-8 bytes as a string");
 
@@ -86,10 +99,10 @@ impl Chunk {
             .collect()
     }
 
-    pub fn next_chunk(stream: &[u8]) -> Result<&[u8]> {
+    pub fn next_chunk(stream: &[u8]) -> Result<&[u8], ChunkError> {
         if stream.len() < 4 {
             // Minimum length for a chunk is 12 - 4 for length, 4 for type, 0 for data, 4 for CRC
-            return Err(Box::new(ChunkError::NotEnoughBytes(stream.len(), 12)));
+            return Err(ChunkError::NotEnoughBytes(stream.len(), 12));
         }
 
         let orig_stream = stream;
@@ -104,10 +117,7 @@ impl Chunk {
         let chunk_length = (4 + 4 + length + 4) as usize;
 
         if chunk_length > orig_stream.len() {
-            return Err(Box::new(ChunkError::LengthTooLarge(
-                chunk_length,
-                orig_stream.len(),
-            )));
+            return Err(ChunkError::LengthTooLarge(chunk_length, orig_stream.len()));
         }
 
         Ok(&orig_stream[..chunk_length])
@@ -125,9 +135,9 @@ impl Display for Chunk {
 }
 
 impl TryFrom<&[u8]> for Chunk {
-    type Error = Error;
+    type Error = ChunkError;
 
-    fn try_from(value: &[u8]) -> Result<Self> {
+    fn try_from(value: &[u8]) -> ChunkResult {
         let orig_value = value;
         let mut value = value;
 
@@ -137,10 +147,7 @@ impl TryFrom<&[u8]> for Chunk {
         let length = u32::from_be_bytes(length);
 
         if length > (1 << 31) {
-            return Err(Box::new(ChunkError::LengthTooLarge(
-                length as usize,
-                1 << 31,
-            )));
+            return Err(ChunkError::LengthTooLarge(length as usize, 1 << 31));
         }
 
         let mut chunk_type_buf = [0 as u8; 4];
@@ -155,14 +162,14 @@ impl TryFrom<&[u8]> for Chunk {
         let crc = u32::from_be_bytes(crc);
 
         if !value.is_empty() {
-            return Err(Box::new(ChunkError::RemainingBytes(value.len())));
+            return Err(ChunkError::RemainingBytes(value.len()));
         }
 
         // The CRC is calculated from the bytes of the chunk_type and chunk_data
         // So skip the first 4 bytes (i.e length), and the last 4 bytes (i.e provided CRC)
         let calculated_crc = calculate_crc(&orig_value[4..orig_value.len() - 4]);
         if calculated_crc != crc {
-            return Err(Box::new(ChunkError::InvalidCRCValue(crc, calculated_crc)));
+            return Err(ChunkError::InvalidCRCValue(crc, calculated_crc));
         }
 
         Ok(Chunk {

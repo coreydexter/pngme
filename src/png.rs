@@ -1,19 +1,20 @@
 use std::{
     convert::TryFrom,
     fs::{self, File},
-    io::{Read, Write},
+    io::{self, Read, Write},
     path::PathBuf,
 };
 use thiserror::Error;
 
 use crate::{
-    chunk::{self, Chunk},
+    chunk::{self, Chunk, ChunkError},
     chunk_type::ChunkType,
-    Error, Result,
 };
 
+pub type PngResult = std::result::Result<Png, PngError>;
+
 #[derive(Error, Debug)]
-enum PngError {
+pub enum PngError {
     #[error("Chunk {0} was not found")]
     ChunkNotPresent(String),
     #[error("Need at least two chunks provided, found `{0}`")]
@@ -24,8 +25,17 @@ enum PngError {
     IENDChunkShouldLast(ChunkType),
     #[error("Header should be a valid PNG header, but found `{0:?}`")]
     NotAValidPNGHeader(Box<Vec<u8>>),
-    #[error("Invalid chunk starting at index {0}")]
-    InvalidChunk(usize),
+    #[error("Invalid chunk starting at index {start_index}")]
+    InvalidChunk {
+        start_index: usize,
+        source: ChunkError,
+    },
+
+    #[error("Failed to read/write from the file")]
+    Io {
+        #[from]
+        source: io::Error,
+    },
 }
 
 pub struct Png {
@@ -37,29 +47,27 @@ impl Png {
     const IHDR_TYPE: &'static str = "IHDR";
     const IEND_TYPE: &'static str = "IEND";
 
-    pub fn from_chunks(chunks: Vec<Chunk>) -> Result<Png> {
+    pub fn from_chunks(chunks: Vec<Chunk>) -> PngResult {
         if chunks.len() < 2 {
-            Err(Box::new(PngError::NeedAtLeastTwoChunks(chunks.len())))
+            Err(PngError::NeedAtLeastTwoChunks(chunks.len()))
         } else if chunks[0].chunk_type().to_string() != Png::IHDR_TYPE {
-            Err(Box::new(PngError::IHDRChunkShouldBeFirst(
-                *chunks[0].chunk_type(),
-            )))
+            Err(PngError::IHDRChunkShouldBeFirst(*chunks[0].chunk_type()))
         } else if chunks[chunks.len() - 1].chunk_type().to_string() != "IEND" {
-            Err(Box::new(PngError::IENDChunkShouldLast(
+            Err(PngError::IENDChunkShouldLast(
                 *chunks[chunks.len() - 1].chunk_type(),
-            )))
+            ))
         } else {
             Ok(Png { chunks })
         }
     }
 
-    pub fn from_file(filename: &PathBuf) -> Result<Png> {
+    pub fn from_file(filename: &PathBuf) -> PngResult {
         let data = fs::read(filename)?;
 
         Png::try_from(&data[..])
     }
 
-    pub fn write_file(&self, filename: &PathBuf) -> Result<()> {
+    pub fn write_file(&self, filename: &PathBuf) -> Result<(), PngError> {
         fs::write(filename, &self.as_bytes()[..])?;
 
         Ok(())
@@ -71,22 +79,22 @@ impl Png {
         self.chunks.insert(self.chunks.len() - 1, chunk);
     }
 
-    pub fn remove_chunk(&mut self, chunk_type: &ChunkType) -> Result<Chunk> {
+    pub fn remove_chunk(&mut self, chunk_type: &ChunkType) -> Result<Chunk, PngError> {
         if chunk_type.to_string() == Png::IHDR_TYPE
             && self.chunks[1].chunk_type().to_string() != Png::IHDR_TYPE
         {
             // We must remain a valid PNG, so can only remove the IHDR chunk if the second chunk is a IHDR chunk
-            return Err(Box::new(PngError::IHDRChunkShouldBeFirst(
+            return Err(PngError::IHDRChunkShouldBeFirst(
                 *self.chunks[1].chunk_type(),
-            )));
+            ));
         }
         if chunk_type.to_string() == Png::IEND_TYPE
             && self.chunks[self.chunks.len() - 2].chunk_type().to_string() != Png::IEND_TYPE
         {
             // We must remain a valid PNG, so can only remove the IEND chunk if the second last chunk is a IEND chunk
-            return Err(Box::new(PngError::IENDChunkShouldLast(
+            return Err(PngError::IENDChunkShouldLast(
                 *self.chunks[self.chunks.len() - 2].chunk_type(),
-            )));
+            ));
         }
 
         let index = self
@@ -97,7 +105,7 @@ impl Png {
             let chunk = self.chunks.remove(i);
             Ok(chunk)
         } else {
-            Err(Box::new(PngError::ChunkNotPresent(chunk_type.to_string())))
+            Err(PngError::ChunkNotPresent(chunk_type.to_string()))
         }
     }
 
@@ -151,9 +159,9 @@ impl Png {
 }
 
 impl TryFrom<&[u8]> for Png {
-    type Error = Error;
+    type Error = PngError;
 
-    fn try_from(value: &[u8]) -> Result<Self> {
+    fn try_from(value: &[u8]) -> PngResult {
         // Read first eight bytes and confirm equals the PNG header
         // Then read chunks
 
@@ -169,21 +177,28 @@ impl TryFrom<&[u8]> for Png {
         cur_offset += 8;
 
         if header != Png::STANDARD_HEADER {
-            return Err(Box::new(PngError::NotAValidPNGHeader(Box::new(
-                header.into(),
-            ))));
+            return Err(PngError::NotAValidPNGHeader(Box::new(header.into())));
         }
 
         let mut chunks: Vec<Chunk> = vec![];
         while value.len() != 0 {
-            let next_chunk_bytes = Chunk::next_chunk(value)?;
+            let next_chunk_bytes =
+                Chunk::next_chunk(value).map_err(|e| PngError::InvalidChunk {
+                    start_index: cur_offset,
+                    source: e,
+                })?;
             let chunk = Chunk::try_from(next_chunk_bytes);
 
-            if chunk.is_err() {
-                return Err(Box::new(PngError::InvalidChunk(cur_offset)));
-            }
+            let chunk = match chunk {
+                Ok(c) => c,
+                Err(e) => {
+                    return Err(PngError::InvalidChunk {
+                        start_index: cur_offset,
+                        source: e,
+                    })
+                }
+            };
 
-            let chunk = chunk.unwrap();
             cur_offset += next_chunk_bytes.len();
             value = &value[next_chunk_bytes.len()..];
             chunks.push(chunk);
