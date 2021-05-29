@@ -9,10 +9,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ChunkTypeError {
-    #[error("Character length of chunk type must be exactly 4")]
-    InvalidCharacterLength,
-    #[error("Invalid character in input, must be an ASCII upper-case or lower-case value")]
-    InvalidCharacter,
+    #[error("Character length `{0}` of chunk type must be exactly 4")]
+    InvalidCharacterLength(usize),
+    #[error("Invalid character at `{0}` in input, must be an ASCII upper-case or lower-case value, not `{1}`")]
+    InvalidCharacter(usize, u8),
 }
 
 // A structure representing the Chunk Type header of a PNG chunk.
@@ -30,14 +30,27 @@ impl ChunkType {
     pub fn bytes(&self) -> [u8; 4] {
         self.bytes.clone()
     }
-    pub fn is_valid(&self) -> bool {
-        //  For convenience in description and in examining PNG files,
+    pub fn is_valid(&self) -> Result<(), Box<ChunkTypeError>> {
+        // For convenience in description and in examining PNG files,
         // type codes are restricted to consist of uppercase and lowercase
         // ASCII letters (A-Z and a-z, or 65-90 and 97-122 decimal)
-        self.bytes
+        let bad_byte = self
+            .bytes
             .iter()
-            .all(|&val| (val >= 65 && val <= 90) || (val >= 97 && val <= 122))
+            .enumerate()
+            .filter(|(_, &v)| !ChunkType::is_ascii(v))
+            .next();
+
+        match bad_byte {
+            Some((i, &v)) => Err(Box::new(ChunkTypeError::InvalidCharacter(i, v))),
+            None => Ok(()),
+        }
     }
+
+    fn is_ascii(v: u8) -> bool {
+        (v >= 65 && v <= 90) || (v >= 97 && v <= 122)
+    }
+
     pub fn is_critical(&self) -> bool {
         // Ancillary bit: bit 5 of first byte
         // 0 (uppercase) = critical, 1 (lowercase) = ancillary.
@@ -73,7 +86,7 @@ impl FromStr for ChunkType {
         let s = s.as_bytes();
         match s.len() {
             4 => TryFrom::try_from([s[0], s[1], s[2], s[3]]),
-            _ => Err(Box::new(ChunkTypeError::InvalidCharacterLength)),
+            len => Err(Box::new(ChunkTypeError::InvalidCharacterLength(len))),
         }
     }
 }
@@ -85,8 +98,8 @@ impl TryFrom<[u8; 4]> for ChunkType {
         let chunk = ChunkType { bytes };
 
         match chunk.is_valid() {
-            true => Ok(chunk),
-            false => Err(Box::new(ChunkTypeError::InvalidCharacter)),
+            Ok(_) => Ok(chunk),
+            Err(e) => Err(e),
         }
     }
 }
@@ -178,13 +191,13 @@ mod tests {
     #[test]
     pub fn test_valid_chunk_is_valid() {
         let chunk = ChunkType::from_str("RuSt").unwrap();
-        assert!(chunk.is_valid());
+        assert!(chunk.is_valid().is_ok());
     }
 
     #[test]
     pub fn test_invalid_chunk_is_valid() {
         let chunk = ChunkType::from_str("Rust").unwrap();
-        assert!(chunk.is_valid());
+        assert!(chunk.is_valid().is_ok());
 
         let chunk = ChunkType::from_str("Ru1t");
         assert!(chunk.is_err());
