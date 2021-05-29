@@ -9,7 +9,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ChunkTypeError {
-    #[error("Character length `{0}` of chunk type must be exactly 4")]
+    #[error("Input character length of chunk type was `{0}`, expected it to be exactly 4")]
     InvalidCharacterLength(usize),
     #[error("Invalid character at `{0}` in input, must be an ASCII upper-case or lower-case value, not `{1}`")]
     InvalidCharacter(usize, u8),
