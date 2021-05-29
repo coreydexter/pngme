@@ -20,6 +20,9 @@ pub enum Command {
     /// Remove a message from a specified PNG file
     #[structopt(name = "remove")]
     Remove(Remove),
+    /// Identify the chunks which have pure text in them
+    #[structopt(name = "identify-text")]
+    IdentifyText(IdentifyText),
 }
 
 #[derive(StructOpt, Debug)]
@@ -55,4 +58,11 @@ pub struct Remove {
     /// Where to write the updated PNG to. If not provided, will overwrite the input PNG
     #[structopt(parse(from_os_str))]
     pub output_file: Option<PathBuf>,
+}
+
+#[derive(StructOpt, Debug)]
+pub struct IdentifyText {
+    /// The input PNG file
+    #[structopt(parse(from_os_str))]
+    pub file_path: PathBuf,
 }

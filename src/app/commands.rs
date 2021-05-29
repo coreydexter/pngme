@@ -1,3 +1,4 @@
+use crate::args::IdentifyText;
 use crate::args::{Decode, Encode, Remove};
 use anyhow::Context;
 use lib_pngme::chunk::Chunk;
@@ -60,4 +61,22 @@ pub fn execute_remove(args: Remove) -> anyhow::Result<()> {
         png.write_file(&args.file_path)
             .with_context(|| format!("Failed to write file {:?}", args.file_path))
     }
+}
+
+pub fn execute_identify_text(args: IdentifyText) -> anyhow::Result<()> {
+    let png = Png::from_file(&args.file_path)
+        .with_context(|| format!("Failed to load PNG file {:?}", args.file_path))?;
+
+    for (index, chunk) in png.chunks().iter().enumerate() {
+        match chunk.data_as_string() {
+            Ok(data) => {
+                if data.len() > 0 {
+                    println!("{} - {} - {}", index, chunk.chunk_type(), data);
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    Ok(())
 }

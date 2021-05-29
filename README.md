@@ -33,10 +33,11 @@ To see a list of the parameters, use the `--help` command, eg
         -V, --version    Prints version information
 
     SUBCOMMANDS:
-        decode    Read a message from a specified PNG file
-        encode    Add a message to a specified PNG file
-        help      Prints this message or the help of the given subcommand(s)
-        remove    Remove a message from a specified PNG file
+        decode           Read a message from a specified PNG file
+        encode           Add a message to a specified PNG file
+        help             Prints this message or the help of the given subcommand(s)
+        identify-text    Identify the chunks which have pure text in them
+        remove           Remove a message from a specified PNG file
 
 # Examples
 
@@ -48,6 +49,14 @@ To see a list of the parameters, use the `--help` command, eg
 
     > target\release\pngme.exe decode examples/image.png teSt
     Woah dude does this actually work?
+
+## Identifying text
+
+Produces lines of the format `{chunk index} - {chunk type} - {chunk message as UTF-8 string}`
+
+    > target\release\pngme.exe identify-text examples/image.png teSt
+    22 - teSt - Woah dude does this actually work?
+
 
 ## Removing
 
