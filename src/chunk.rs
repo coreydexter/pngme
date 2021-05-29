@@ -9,14 +9,14 @@ use crate::{Error, Result};
 
 #[derive(Error, Debug)]
 enum ChunkError {
-    #[error("Provided CRC value does match calculated CRC value")]
-    InvalidCRCValue,
-    #[error("Length exceeds allowed range")]
-    RemainingBytes,
-    #[error("There were bytes remaining, length is likely incorrect")]
-    LengthTooLarge,
-    #[error("There weren't enough bytes to satify the specified chunks length")]
-    NotEnoughBytes,
+    #[error("Provided CRC value `{0}` does match calculated CRC value `{1}`")]
+    InvalidCRCValue(u32, u32),
+    #[error("There were bytes `{0}` remaining, length is likely incorrect")]
+    RemainingBytes(usize),
+    #[error("Length of `{0}` exceeds number of bytes `{1}")]
+    LengthTooLarge(usize, usize),
+    #[error("There weren't enough bytes `{0}` to satify the specified chunks length `{1}`")]
+    NotEnoughBytes(usize, u32),
 }
 
 pub struct Chunk {
@@ -88,7 +88,8 @@ impl Chunk {
 
     pub fn next_chunk(stream: &[u8]) -> Result<&[u8]> {
         if stream.len() < 4 {
-            return Err(Box::new(ChunkError::NotEnoughBytes));
+            // Minimum length for a chunk is 12 - 4 for length, 4 for type, 0 for data, 4 for CRC
+            return Err(Box::new(ChunkError::NotEnoughBytes(stream.len(), 12)));
         }
 
         let orig_stream = stream;
@@ -103,7 +104,10 @@ impl Chunk {
         let chunk_length = (4 + 4 + length + 4) as usize;
 
         if chunk_length > orig_stream.len() {
-            return Err(Box::new(ChunkError::LengthTooLarge));
+            return Err(Box::new(ChunkError::LengthTooLarge(
+                chunk_length,
+                orig_stream.len(),
+            )));
         }
 
         Ok(&orig_stream[..chunk_length])
@@ -133,7 +137,10 @@ impl TryFrom<&[u8]> for Chunk {
         let length = u32::from_be_bytes(length);
 
         if length > (1 << 31) {
-            return Err(Box::new(ChunkError::LengthTooLarge));
+            return Err(Box::new(ChunkError::LengthTooLarge(
+                length as usize,
+                1 << 31,
+            )));
         }
 
         let mut chunk_type_buf = [0 as u8; 4];
@@ -148,14 +155,14 @@ impl TryFrom<&[u8]> for Chunk {
         let crc = u32::from_be_bytes(crc);
 
         if !value.is_empty() {
-            return Err(Box::new(ChunkError::RemainingBytes));
+            return Err(Box::new(ChunkError::RemainingBytes(value.len())));
         }
 
         // The CRC is calculated from the bytes of the chunk_type and chunk_data
         // So skip the first 4 bytes (i.e length), and the last 4 bytes (i.e provided CRC)
         let calculated_crc = calculate_crc(&orig_value[4..orig_value.len() - 4]);
         if calculated_crc != crc {
-            return Err(Box::new(ChunkError::InvalidCRCValue));
+            return Err(Box::new(ChunkError::InvalidCRCValue(crc, calculated_crc)));
         }
 
         Ok(Chunk {
