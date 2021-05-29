@@ -3,6 +3,7 @@ use std::fmt::Display;
 use std::io;
 use std::io::Read;
 use std::str::FromStr;
+use std::string::FromUtf8Error;
 use thiserror::Error;
 
 use crate::chunk_type::ChunkType;
@@ -20,6 +21,11 @@ pub enum ChunkError {
     LengthTooLarge(usize, usize),
     #[error("There weren't enough bytes `{0}` to satify the specified chunks length `{1}`")]
     NotEnoughBytes(usize, u32),
+    #[error("Data is not a valid UTF-8 string")]
+    DataNotValidUtf8 {
+        #[from]
+        source: FromUtf8Error,
+    },
     #[error("Failed to read")]
     Io {
         #[from]
@@ -82,8 +88,7 @@ impl Chunk {
     }
 
     pub fn data_as_string(&self) -> Result<String, ChunkError> {
-        let str = String::from_utf8(self.chunk_data.clone())
-            .expect("ahh whatever failed to parse utf-8 bytes as a string");
+        let str = String::from_utf8(self.chunk_data.clone())?;
 
         Ok(str)
     }
@@ -126,11 +131,7 @@ impl Chunk {
 
 impl Display for Chunk {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.data_as_string().expect("ahh todo convert error type")
-        )
+        write!(f, "{}", self.data_as_string().map_err(|_| std::fmt::Error)?)
     }
 }
 
