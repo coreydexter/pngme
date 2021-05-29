@@ -71,15 +71,16 @@ impl Png {
         self.chunks.insert(self.chunks.len() - 1, chunk);
     }
 
-    pub fn remove_chunk(&mut self, chunk_type: &str) -> Result<Chunk> {
-        if chunk_type == Png::IHDR_TYPE && self.chunks[1].chunk_type().to_string() != Png::IHDR_TYPE
+    pub fn remove_chunk(&mut self, chunk_type: &ChunkType) -> Result<Chunk> {
+        if chunk_type.to_string() == Png::IHDR_TYPE
+            && self.chunks[1].chunk_type().to_string() != Png::IHDR_TYPE
         {
             // We must remain a valid PNG, so can only remove the IHDR chunk if the second chunk is a IHDR chunk
             return Err(Box::new(PngError::IHDRChunkShouldBeFirst(
                 *self.chunks[1].chunk_type(),
             )));
         }
-        if chunk_type == Png::IEND_TYPE
+        if chunk_type.to_string() == Png::IEND_TYPE
             && self.chunks[self.chunks.len() - 2].chunk_type().to_string() != Png::IEND_TYPE
         {
             // We must remain a valid PNG, so can only remove the IEND chunk if the second last chunk is a IEND chunk
@@ -108,7 +109,7 @@ impl Png {
         &self.chunks[..]
     }
 
-    pub fn chunk_by_type(&self, chunk_type: &str) -> Option<&Chunk> {
+    pub fn chunk_by_type(&self, chunk_type: &ChunkType) -> Option<&Chunk> {
         self.get_first_chunk_of_type(chunk_type)
             .map(|(_, chunk)| chunk)
     }
@@ -140,11 +141,11 @@ impl Png {
         self.chunks().get(self.chunks().len() - 1)
     }
 
-    fn get_first_chunk_of_type(&self, chunk_type: &str) -> Option<(usize, &Chunk)> {
+    fn get_first_chunk_of_type(&self, chunk_type: &ChunkType) -> Option<(usize, &Chunk)> {
         self.chunks
             .iter()
             .enumerate()
-            .filter(|&(_, chunk)| chunk.chunk_type().to_string() == chunk_type)
+            .filter(|&(_, chunk)| chunk.chunk_type() == chunk_type)
             .next()
     }
 }
@@ -221,6 +222,10 @@ mod tests {
         Png::from_chunks(chunks).unwrap()
     }
 
+    fn as_chunk_type(input: &str) -> ChunkType {
+        ChunkType::from_str(input).unwrap()
+    }
+
     #[test]
     fn test_from_chunks() {
         let chunks = testing_chunks();
@@ -289,7 +294,7 @@ mod tests {
     #[test]
     fn test_chunk_by_type() {
         let png = testing_png();
-        let chunk = png.chunk_by_type("IHDR").unwrap();
+        let chunk = png.chunk_by_type(&as_chunk_type("IHDR")).unwrap();
         assert_eq!(&chunk.chunk_type().to_string(), "IHDR");
         assert_eq!(&chunk.data_as_string().unwrap(), "I am the first chunk");
     }
@@ -298,7 +303,7 @@ mod tests {
     fn test_append_chunk() {
         let mut png = testing_png();
         png.append_chunk(Chunk::from_strings("TeSt", "Message").unwrap());
-        let chunk = png.chunk_by_type("TeSt").unwrap();
+        let chunk = png.chunk_by_type(&as_chunk_type("TeSt")).unwrap();
         assert_eq!(&chunk.chunk_type().to_string(), "TeSt");
         assert_eq!(&chunk.data_as_string().unwrap(), "Message");
     }
@@ -307,27 +312,27 @@ mod tests {
     fn test_IHDR_chunk_must_remain() {
         let mut png = testing_png();
         // Confirm the test makes sense, i.e we do have the IHDR chunk
-        assert!(png.chunk_by_type("IHDR").is_some());
+        assert!(png.chunk_by_type(&as_chunk_type("IHDR")).is_some());
 
         // We can't remove the IHDR chunk, that would create an invalid PNG
-        assert!(png.remove_chunk("IHDR").is_err());
+        assert!(png.remove_chunk(&as_chunk_type("IHDR")).is_err());
     }
 
     #[test]
     fn test_IEND_chunk_must_remain() {
         let mut png = testing_png();
         // Confirm the test makes sense, i.e we do have the IEND chunk
-        assert!(png.chunk_by_type("IEND").is_some());
+        assert!(png.chunk_by_type(&as_chunk_type("IEND")).is_some());
 
         // We can't remove the IEND chunk, that would create an invalid PNG
-        assert!(png.remove_chunk("IEND").is_err());
+        assert!(png.remove_chunk(&as_chunk_type("IEND")).is_err());
     }
 
     #[test]
     fn test_remove_chunk() {
         let mut png = testing_png();
-        png.remove_chunk("miDl").unwrap();
-        let chunk = png.chunk_by_type("miDl");
+        png.remove_chunk(&as_chunk_type("miDl")).unwrap();
+        let chunk = png.chunk_by_type(&as_chunk_type("miDl"));
         assert!(chunk.is_none());
     }
 
