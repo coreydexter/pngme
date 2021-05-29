@@ -21,7 +21,7 @@ pub enum ChunkTypeError {
 // Eg the Chunk Type `RuSt` is different to `Rust`
 // Refer to section 3.2 on the PNG Specification 1.2 for reference of details.
 // TODO write a brief description on creating a ChunkType
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ChunkType {
     bytes: [u8; 4],
 }

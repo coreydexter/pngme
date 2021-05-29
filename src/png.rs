@@ -6,20 +6,24 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::{chunk::Chunk, Error, Result};
+use crate::{
+    chunk::{self, Chunk},
+    chunk_type::ChunkType,
+    Error, Result,
+};
 
 #[derive(Error, Debug)]
 enum PngError {
-    #[error("Chunk was not found")]
-    ChunkNotPresent,
-    #[error("Need at least two chunks provided")]
-    NeedAtLeastTwoChunks,
-    #[error("IDHR chunk type should be the first chunk")]
-    IHDRChunkShouldBeFirst,
-    #[error("IEND chunk type should be the last chunk")]
-    IENDChunkShouldLast,
-    #[error("Header was not a valid PNG header")]
-    NotAValidPNGHeader,
+    #[error("Chunk {0} was not found")]
+    ChunkNotPresent(String),
+    #[error("Need at least two chunks provided, found `{0}`")]
+    NeedAtLeastTwoChunks(usize),
+    #[error("IDHR chunk type should be the first chunk, but found `{0}`")]
+    IHDRChunkShouldBeFirst(ChunkType),
+    #[error("IEND chunk type should be the last chunk, but found `{0}`")]
+    IENDChunkShouldLast(ChunkType),
+    #[error("Header should be a valid PNG header, but found `{0:?}`")]
+    NotAValidPNGHeader(Box<Vec<u8>>),
     #[error("Invalid chunk starting at index {0}")]
     InvalidChunk(usize),
 }
@@ -35,11 +39,15 @@ impl Png {
 
     pub fn from_chunks(chunks: Vec<Chunk>) -> Result<Png> {
         if chunks.len() < 2 {
-            Err(Box::new(PngError::NeedAtLeastTwoChunks))
-        } else if chunks[0].chunk_type().to_string() != "IHDR" {
-            Err(Box::new(PngError::IHDRChunkShouldBeFirst))
+            Err(Box::new(PngError::NeedAtLeastTwoChunks(chunks.len())))
+        } else if chunks[0].chunk_type().to_string() != Png::IHDR_TYPE {
+            Err(Box::new(PngError::IHDRChunkShouldBeFirst(
+                *chunks[0].chunk_type(),
+            )))
         } else if chunks[chunks.len() - 1].chunk_type().to_string() != "IEND" {
-            Err(Box::new(PngError::IENDChunkShouldLast))
+            Err(Box::new(PngError::IENDChunkShouldLast(
+                *chunks[chunks.len() - 1].chunk_type(),
+            )))
         } else {
             Ok(Png { chunks })
         }
@@ -67,13 +75,17 @@ impl Png {
         if chunk_type == Png::IHDR_TYPE && self.chunks[1].chunk_type().to_string() != Png::IHDR_TYPE
         {
             // We must remain a valid PNG, so can only remove the IHDR chunk if the second chunk is a IHDR chunk
-            return Err(Box::new(PngError::IHDRChunkShouldBeFirst));
+            return Err(Box::new(PngError::IHDRChunkShouldBeFirst(
+                *self.chunks[1].chunk_type(),
+            )));
         }
         if chunk_type == Png::IEND_TYPE
             && self.chunks[self.chunks.len() - 2].chunk_type().to_string() != Png::IEND_TYPE
         {
             // We must remain a valid PNG, so can only remove the IEND chunk if the second last chunk is a IEND chunk
-            return Err(Box::new(PngError::IENDChunkShouldLast));
+            return Err(Box::new(PngError::IENDChunkShouldLast(
+                *self.chunks[self.chunks.len() - 2].chunk_type(),
+            )));
         }
 
         let index = self
@@ -84,7 +96,7 @@ impl Png {
             let chunk = self.chunks.remove(i);
             Ok(chunk)
         } else {
-            Err(Box::new(PngError::ChunkNotPresent))
+            Err(Box::new(PngError::ChunkNotPresent(chunk_type.to_string())))
         }
     }
 
@@ -156,7 +168,9 @@ impl TryFrom<&[u8]> for Png {
         cur_offset += 8;
 
         if header != Png::STANDARD_HEADER {
-            return Err(Box::new(PngError::NotAValidPNGHeader));
+            return Err(Box::new(PngError::NotAValidPNGHeader(Box::new(
+                header.into(),
+            ))));
         }
 
         let mut chunks: Vec<Chunk> = vec![];
