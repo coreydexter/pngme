@@ -16,3 +16,4 @@ path = "src/app/pngme_main.rs"
 
 [dependencies]
 structopt = "0.3.21"
+thiserror = "1.0.25"

@@ -4,36 +4,24 @@ use std::{
     io::{Read, Write},
     path::PathBuf,
 };
+use thiserror::Error;
 
 use crate::{chunk::Chunk, Error, Result};
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 enum PngError {
+    #[error("Chunk was not found")]
     ChunkNotPresent,
+    #[error("Need at least two chunks provided")]
     NeedAtLeastTwoChunks,
+    #[error("IDHR chunk type should be the first chunk")]
     IHDRChunkShouldBeFirst,
+    #[error("IEND chunk type should be the last chunk")]
     IENDChunkShouldLast,
+    #[error("Header was not a valid PNG header")]
     NotAValidPNGHeader,
+    #[error("Invalid chunk starting at index {0}")]
     InvalidChunk(usize),
-}
-
-impl std::error::Error for PngError {}
-
-impl std::fmt::Display for PngError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PngError::ChunkNotPresent => write!(f, "Chunk was not found"),
-            PngError::NeedAtLeastTwoChunks => write!(f, "Need at least two chunks provided"),
-            PngError::IHDRChunkShouldBeFirst => {
-                write!(f, "IHDR chunk type should be the first chunk")
-            }
-            PngError::IENDChunkShouldLast => write!(f, "IEND chunk type should be the last chunk"),
-            PngError::NotAValidPNGHeader => write!(f, "Header was not a valid PNG header"),
-            PngError::InvalidChunk(index) => {
-                write!(f, "Invalid chunk starting at index {}", index)
-            }
-        }
-    }
 }
 
 pub struct Png {

@@ -5,28 +5,14 @@ use std::{
 };
 
 use crate::Error;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ChunkTypeError {
+    #[error("Character length of chunk type must be exactly 4")]
     InvalidCharacterLength,
+    #[error("Invalid character in input, must be an ASCII upper-case or lower-case value")]
     InvalidCharacter,
-}
-
-impl std::error::Error for ChunkTypeError {}
-impl fmt::Display for ChunkTypeError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ChunkTypeError::InvalidCharacterLength => {
-                write!(f, "Character length of chunk type must be exactly 4")
-            }
-            ChunkTypeError::InvalidCharacter => {
-                write!(
-                    f,
-                    "Invalid character in input, must be 65 <= v <= 90 or 97 <= v <= 122"
-                )
-            }
-        }
-    }
 }
 
 // A structure representing the Chunk Type header of a PNG chunk.

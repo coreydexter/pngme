@@ -2,34 +2,21 @@ use std::convert::TryFrom;
 use std::fmt::Display;
 use std::io::Read;
 use std::str::FromStr;
+use thiserror::Error;
 
 use crate::chunk_type::ChunkType;
 use crate::{Error, Result};
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 enum ChunkError {
+    #[error("Provided CRC value does match calculated CRC value")]
     InvalidCRCValue,
+    #[error("Length exceeds allowed range")]
     RemainingBytes,
+    #[error("There were bytes remaining, length is likely incorrect")]
     LengthTooLarge,
+    #[error("There weren't enough bytes to satify the specified chunks length")]
     NotEnoughBytes,
-}
-
-impl std::error::Error for ChunkError {}
-impl std::fmt::Display for ChunkError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChunkError::InvalidCRCValue => {
-                write!(f, "Provided CRC value does not match calculated CRC value")
-            }
-            ChunkError::LengthTooLarge => write!(f, "Length exceeds allow range"),
-            ChunkError::RemainingBytes => {
-                write!(f, "There were bytes remaining, length is likely incorrect")
-            }
-            ChunkError::NotEnoughBytes => {
-                write!(f, "There weren't enough bytes to satify the chunk")
-            }
-        }
-    }
 }
 
 pub struct Chunk {
