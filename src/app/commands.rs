@@ -1,6 +1,6 @@
 use crate::args::{Decode, Encode, Remove};
-use crate::chunk::Chunk;
-use crate::png::Png;
+use lib_pngme::chunk::Chunk;
+use lib_pngme::png::Png;
 
 pub fn execute_encode(args: Encode) {
     let mut png = Png::from_file(&args.file_path).expect("Failed to load PNG file");
