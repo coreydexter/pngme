@@ -1,3 +1,4 @@
+use lib_pngme::chunk_type::ChunkType;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -27,7 +28,7 @@ pub struct Encode {
     #[structopt(parse(from_os_str))]
     pub file_path: PathBuf,
     /// The 4 letter chunk type to use, eg teSt
-    pub chunk_type: String,
+    pub chunk_type: ChunkType,
     /// The message to encode
     pub message: String,
     /// Where to write the updated PNG to. If not provided, will overwrite the input PNG
@@ -41,7 +42,7 @@ pub struct Decode {
     #[structopt(parse(from_os_str))]
     pub file_path: PathBuf,
     /// The 4 letter chunk type to search for, eg teSt
-    pub chunk_type: String,
+    pub chunk_type: ChunkType,
 }
 
 #[derive(StructOpt, Debug)]
@@ -50,7 +51,7 @@ pub struct Remove {
     #[structopt(parse(from_os_str))]
     pub file_path: PathBuf,
     /// The 4 letter chunk type to remove, eg teSt. Will only remove the first chunk of this type found
-    pub chunk_type: String,
+    pub chunk_type: ChunkType,
     /// Where to write the updated PNG to. If not provided, will overwrite the input PNG
     #[structopt(parse(from_os_str))]
     pub output_file: Option<PathBuf>,

@@ -5,10 +5,7 @@ use lib_pngme::png::Png;
 pub fn execute_encode(args: Encode) {
     let mut png = Png::from_file(&args.file_path).expect("Failed to load PNG file");
 
-    png.append_chunk(
-        Chunk::from_strings(&args.chunk_type, &args.message)
-            .expect("Failed to create chunk - chunk_type may be invalid"),
-    );
+    png.append_chunk(Chunk::new(args.chunk_type, args.message.into_bytes()));
 
     if let Some(output_file) = args.output_file {
         println!("Writing out file to {:?}", output_file);
